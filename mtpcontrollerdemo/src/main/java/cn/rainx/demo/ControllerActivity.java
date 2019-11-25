@@ -9,36 +9,27 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import cn.rainx.exif.ExifUtils;
 import cn.rainx.ptp.interfaces.FileDownloadedListener;
 import cn.rainx.ptp.interfaces.FileTransferListener;
 import cn.rainx.ptp.params.SyncParams;
 import cn.rainx.ptp.usbcamera.BaselineInitiator;
 import cn.rainx.ptp.usbcamera.DeviceInfo;
 import cn.rainx.ptp.usbcamera.InitiatorFactory;
-import cn.rainx.ptp.usbcamera.ObjectInfo;
 import cn.rainx.ptp.usbcamera.PTPException;
 import cn.rainx.ptp.usbcamera.sony.SonyInitiator;
 
@@ -55,9 +46,7 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
     // USB 设备句柄
     UsbDevice usbDevice;
 
-    // 对象名称
-    EditText etPtpObjectName;
-    EditText etPtpObjectInfoName;
+
 
     CancellationSignal signal;
 
@@ -133,13 +122,7 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
         ((Button) findViewById(R.id.allUsbDevices)).setOnClickListener(this);
         ((Button) findViewById(R.id.connectToDevices)).setOnClickListener(this);
         ((Button) findViewById(R.id.getDevicePTPInfo)).setOnClickListener(this);
-        ((Button) findViewById(R.id.getAllObjects)).setOnClickListener(this);
-        ((Button) findViewById(R.id.transferObject)).setOnClickListener(this);
-        ((Button) findViewById(R.id.getObjectInfo)).setOnClickListener(this);
-        ((Button) findViewById(R.id.updateExif)).setOnClickListener(this);
 
-        etPtpObjectName = (EditText) findViewById(R.id.ptpObject);
-        etPtpObjectInfoName = (EditText) findViewById(R.id.ptpObjectInfo);
 
         etLogPanel = (EditText) findViewById(R.id.logPanel);
         etLogPanel.setGravity(Gravity.BOTTOM);
@@ -199,21 +182,9 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
                 connectMTPDevice();
                 break;
             case R.id.getDevicePTPInfo:
-                //getDevicePTPInfo();
                 getDevicePTPInfoVersion2();
                 break;
-            case R.id.getAllObjects:
-                getAllObjects();
-                break;
-            case R.id.getObjectInfo:
-                getObjectInfo();
-                break;
-            case R.id.transferObject:
-                transferObject();
-                break;
-            case R.id.updateExif:
-                updateExif();
-                break;
+
         }
     }
 
@@ -254,96 +225,8 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
         }
     }
 
-    public void getAllObjects() {
-        if (isOpenConnected && bi != null) {
-            log("准备获取objects信息");
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        int[] sids = bi.getStorageIds();
-                        for (int sid : sids) {
-                            log("--------");
-                            log("检查storage id: " + sid);
-                            log("--------");
-                            int[] objectHandles = bi.getObjectHandles(sid, 0, 0);
-                            log("获取sid (" + sid + ")中的对象句柄");
-                            List<String> strHandleList = new ArrayList<String>(objectHandles.length);
-
-                            for (int objectHandle : objectHandles) {
-                                strHandleList.add(objectHandle + "");
-                            }
-                            log(TextUtils.join(",", strHandleList));
-                        }
-                    } catch (PTPException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }).start();
 
 
-        } else {
-            log("mtp/ptp 设备未连接");
-        }
-    }
-
-    public void getObjectInfo() {
-
-        try {
-            if (isOpenConnected) {
-                final String oh = etPtpObjectInfoName.getText().toString();
-                if (oh.trim() == "") {
-                    log("请输入object handle , 为数字类型");
-                    return;
-                }
-
-                log("准备获取信息");
-
-                ObjectInfo info = bi.getObjectInfo(Integer.valueOf(oh));
-                if (info != null) {
-
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    PrintStream ps = new PrintStream(baos);
-                    info.dump(ps);
-                    String content = new String(baos.toByteArray(), StandardCharsets.UTF_8);
-                    log(content);
-                }
-            }
-        }catch (PTPException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void transferObject() {
-        if (isOpenConnected) {
-            final String oh = etPtpObjectName.getText().toString();
-            if (oh.trim() == "") {
-                log("请输入object handle , 为数字类型");
-                return;
-            }
-            final int ohandle = Integer.valueOf(oh);
-
-            (new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    File tmp = new File(getExternalCacheDir(), "tmp_" + oh + ".jpg");
-                    String outputFilePath = tmp.getPath();
-                    log("准备传输数据");
-                    try {
-                        boolean transfer = bi.importFile(ohandle, outputFilePath);
-
-                        if (transfer) {
-                            log("传输成功 : " + outputFilePath);
-                        } else {
-                            log("传输失败");
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            })).start();
-        }
-    }
 
 
     // 连接到ptp/mtp设备
@@ -368,14 +251,6 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
         }
     }
 
-    // 更新图片的exif信息
-    private void updateExif() {
-        log("getExternalFilesDir is " + getExternalFilesDir(null).getAbsolutePath());
-        final String filePath = getExternalFilesDir(null).getAbsolutePath() + "/hello.jpg";
-        // 密云	116.85	减0小时12分36秒	40.37
-        boolean ret = ExifUtils.updateExifLocation(filePath, 40.37d, 116.85, new Date());
-        log("update ret value is " + ret);
-    }
 
 
     void performConnect(UsbDevice device) {
@@ -423,22 +298,6 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
 
 
 
-    // searches for an interface on the given USB device, returns only class 6  // From androiddevelopers ADB-Test
-    private UsbInterface findUsbInterface(UsbDevice device) {
-        //Log.d (TAG, "findAdbInterface " + device.getDeviceName());
-        int count = device.getInterfaceCount();
-        for (int i = 0; i < count; i++) {
-            UsbInterface intf = device.getInterface(i);
-            Log.d (TAG, "Interface " +i + " Class " +intf.getInterfaceClass() +" Prot " +intf.getInterfaceProtocol());
-            if (intf.getInterfaceClass() == 6
-                //255 && intf.getInterfaceSubclass() == 66 && intf.getInterfaceProtocol() == 1
-                    ) {
-                return intf;
-            }
-        }
-        return null;
-    }
-
     private void log(final String text) {
         ControllerActivity.this.runOnUiThread(new Runnable() {
             @Override
@@ -451,10 +310,4 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
         });
     }
 
-    public static String byteArrayToHex(byte[] a) {
-        StringBuilder sb = new StringBuilder(a.length * 2);
-        for(byte b: a)
-            sb.append(String.format("%02x", b));
-        return sb.toString();
-    }
 }

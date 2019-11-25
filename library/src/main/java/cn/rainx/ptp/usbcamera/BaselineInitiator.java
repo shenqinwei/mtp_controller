@@ -22,7 +22,6 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.util.Log;
-import android.widget.ImageView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -33,13 +32,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import cn.rainx.ptp.db.SyncDevice;
-import cn.rainx.ptp.db.SyncDeviceManager;
 import cn.rainx.ptp.interfaces.FileAddedListener;
 import cn.rainx.ptp.interfaces.FileDownloadedListener;
 import cn.rainx.ptp.interfaces.FileTransferListener;
 import cn.rainx.ptp.params.SyncParams;
-import cn.rainx.ptp.usbcamera.sony.SonyInitiator;
 
 /**
  * This initiates interactions with USB devices, supporting only
@@ -102,17 +98,11 @@ public class BaselineInitiator extends NameFactory implements Runnable {
     public UsbDeviceConnection mConnection = null; // must be initialized first!
     	// mUsbManager = (UsbManager)getSystemService(Context.USB_SERVICE);
 
-    protected int OBJECT_ADDED_EVENT_CODE = Event.ObjectAdded;
 
-    protected List<FileAddedListener> fileAddedListenerList = new ArrayList<FileAddedListener>();
     protected List<FileDownloadedListener> fileDownloadedListenerList = new ArrayList<FileDownloadedListener>();
     protected List<FileTransferListener> fileTransferListenerList = new ArrayList<FileTransferListener>();
 
-    /// 是否自动下载文件
-    protected boolean autoDownloadFile = true;
 
-    /// 是否自动轮询事件
-    protected boolean autoPollEvent = true;
 
     /// 文件下载路径
     protected String fileDownloadPath;
@@ -123,19 +113,8 @@ public class BaselineInitiator extends NameFactory implements Runnable {
 
     // 同步触发模式
     protected int syncTriggerMode = SyncParams.SYNC_TRIGGER_MODE_EVENT;
-    // 同步模式
-    protected int syncMode = SyncParams.SYNC_MODE_SYNC_NEW_ADDED;
-    // 同步记录模式
-    protected int syncRecordMode = SyncParams.SYNC_RECORD_MODE_REMEMBER;
 
-    // 获取get object handle 时的过滤参数 0 为全部文件
-    protected int getObjectHandleFilterParam = 0;
 
-    // 运行时的线程
-    protected volatile boolean pollThreadRunning = false;
-
-    // 使用文件名或者文件object handle ID
-    protected int fileNameRule = SyncParams.FILE_NAME_RULE_HANDLE_ID;
 
     // 在open session 的时候，有的时候会出现相机设备已经open session 了，但是手机并不知道这个消息，这个时候需
     // 要重新关闭之后再进行openSession操作。
@@ -158,7 +137,6 @@ public class BaselineInitiator extends NameFactory implements Runnable {
             throw new PTPException ("Connection = null");//IllegalArgumentException();
         }
     	this.mConnection = connection;
-//        try {
             if (dev == null) {
                 throw new PTPException ("dev = null");//IllegalArgumentException();
             }
@@ -166,7 +144,6 @@ public class BaselineInitiator extends NameFactory implements Runnable {
             this.device = dev;
             intf = findUsbInterface (dev);
 
-//            UsbInterface usbInterface = intf.getUsbInterface();
 
             if (intf == null) {
             //if (usbInterface == null) {
@@ -190,22 +167,6 @@ public class BaselineInitiator extends NameFactory implements Runnable {
             inMaxPS = epOut.getMaxPacketSize();
             intrMaxPS = epIn.getMaxPacketSize();
 
-            //UsbDevice usbDevice = dev.getUsbDevice();
-//            UsbConfigDescriptor[] descriptors = usbDevice.getConfig();
-//
-//            if ((descriptors == null) || (descriptors.length < 1)) {
-//                throw new PTPException("UsbDevice with no descriptors!");
-//            }
-
-            // we want exclusive access to this interface.
-            //TODO implement: UsbDeviceConnection.claimInterface (intf, true);
-//            dev.open(
-//                descriptors[0].getConfigurationValue(),
-//                intf.getInterface(),
-//                intf.getAlternateSetting()
-//            );
-
-            // clear epOut any previous state
             reset();
             if (getClearStatus() != Response.OK
                     && getDeviceStatus(null) != Response.OK) {
@@ -388,18 +349,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         }
     }
 
-	public Response showResponse (Response response) {
-		Log.d(TAG, "  Type: " + response.getBlockTypeName(response.getBlockType()) +" (Code: " +response.getBlockType() +")\n");   // getU16 (4)
-		Log.d(TAG, "  Name: " + response.getCodeName(response.getCode())+ ", code: 0x" + Integer.toHexString(response.getCode()) +"\n"); //getU16 (6)
-		//			log ("  CodeString:" + response.getCodeString()+ "\n");
-		Log.d(TAG, "  Length: " + response.getLength()+ " bytes\n");  //getS32 (0)
-		Log.d(TAG, "  String: " + response.toString());
-		return response;
-	}
 
-	public void showResponseCode (String comment, int code){
-		Log.d(TAG, comment +" Response: " +Response._getResponseString (code) +",  code: 0x" + Integer.toHexString(code));
-	}
     
     /**
      * @return true if the current session is active, false otherwise
@@ -549,7 +499,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
     // per fig D.6, response may hold stalled endpoint numbers
     protected int getDeviceStatus(Buffer buf)
     throws PTPException {
-//        try {
+
     	if (mConnection == null) throw new PTPException("No Connection");
     	
             byte[] data = new byte[33];
@@ -580,12 +530,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
             }
 
             return buf.getU16(2);
-//        }  catch (USBException e) {
-//            throw new PTPException(
-//                "Error initializing the communication with the camera (" +
-//                e.getMessage()
-//                + ")" , e);
-//        }
+
     }
 
     // add event listener
@@ -603,13 +548,10 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         Response response;
 
         synchronized (session) {
-//            Log.d(TAG, "getDeviceInfoUncached, sessionID " +session.getSessionId());
             Command command;
             command = new Command(Command.GetDeviceInfo, session);
-//            Log.d(TAG, "Command: " +(command.getCode()) +" session: " + session.getSessionId());
             response = transactUnsync(command, data);
-//            Log.d(TAG, "getDeviceInfoUncached finished, " +Response._getResponseString(response.getCode()) +" responsecode: " +response.getCode()); 
-            
+
         }
 
         switch (response.getCode()) {
@@ -632,7 +574,6 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         if (!"command".equals(command.getBlockTypeName(command.getBlockType()))) {
             throw new IllegalArgumentException(command.toString());
         }
-       // Log.d(TAG, command.toString() + "   Data: " +data.toString());
 
         // sanity checking
         int opcode = command.getCode();
@@ -658,11 +599,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         Response response;
         boolean abort = true;
 
-//        try {
-//            OutputStream stream = device.getOutputStream(epOut);
 
-            // issue command
-            // rejected commands will stall both EPs
             if (TRACE) {
                 System.err.println(command.toString());
             }
@@ -672,8 +609,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
             // may need to terminate request with zero length packet
             if ((command.length % epOut.getMaxPacketSize()) == 0) {
 				lenC = mConnection.bulkTransfer(epOut, command.data, 0, DEFAULT_TIMEOUT);
-//				Log.d(TAG, "0 sent bytes:" +lenC);
-                //stream.write(command.data, 0, 0);
+
             }
 
             // data exchanged?
@@ -692,36 +628,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
                         System.err.println(data.toString());
                     }
 
-                    // Special handling for the read-from-N-mbytes-file case
-                    //TODO yet to be implemented
-//                    if (data instanceof FileSendData) {
-//                        FileSendData fd = (FileSendData) data;
-//                        int len = fd.data.length - fd.offset;
-//                        int temp;
-//
-//                        // fill up the rest of the first buffer
-//                        len = fd.read(fd.data, fd.offset, len);
-//                        if (len < 0) {
-//                            throw new PTPException("eh? " + len);
-//                        }
-//                        len += fd.offset;
-//
-//                        for (;;) {
-//                            // write data or terminating packet
-//                        	mConnection.bulkTransfer(epOut, data , command.length , DEFAULT_TIMEOUT);
-//                            //stream.write(fd.data, 0, len);
-//                            if (len != fd.data.length) {
-//                                break;
-//                            }
-//
-//                            len = fd.read(fd.data, 0, fd.data.length);
-//                            if (len < 0) {
-//                                throw new PTPException("short: " + len);
-//                            }
-//                        }
-//
-//                    } else {
-                        // write data and maybe terminating packet
+
                     byte[] bytes = data.getData();//new byte [data.length];
 //    				Log.d(TAG, "send Data");
                     int len = mConnection.bulkTransfer(epOut, bytes , bytes.length, DEFAULT_TIMEOUT);
@@ -843,150 +750,8 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         //
     }
     //Ash code
-    
-	public void writeExtraData(Command command, Data data, int timeout)
-	{
-		int lenC = mConnection.bulkTransfer(epOut, command.data , command.length , timeout);
-		
-        if ((command.length % epOut.getMaxPacketSize()) == 0) {
-			lenC = mConnection.bulkTransfer(epOut, command.data, 0, timeout);
-        }
-		////////////////////////////////////	
-		int opcode = command.getCode();
-		data.offset = 0;
-        data.putHeader(data.getLength(), 2 , opcode, command.getXID());
-        byte[] bytes = data.getData();
-        
 
-        mConnection.bulkTransfer(epOut, data.getData() , data.length , timeout);
-        
-        if ((data.length % epOut.getMaxPacketSize()) == 0) {
-        	mConnection.bulkTransfer(epOut, bytes , 0, timeout);
 
-        }
-	
-	}
-    
-    
-	/*************************************************************************************
-	 *                                                                                   *
-	 *	  Methods to be overridden in camera-specific instances of baselineInititator    *
-	 *                                                                                   *
-	 *************************************************************************************/
-
-	// this is an abstract method to be declared in
-	public Response initiateCapture(int storageId, int formatCode)
-			throws PTPException {
-		return null;
-	}
-	public Response startBulb () throws PTPException{
-		return null;
-	}
-
-	public Response stopBulb () throws PTPException{
-		return null;
-	}
-	public Response setShutterSpeed (int speed) throws PTPException{
-		return null;
-	}  
-
-	public Response setExposure(int exposure) throws PTPException{    	
-		return null;
-	}
-
-	public Response setISO(int value) throws PTPException{
-		return null;
-	}
-
-	public Response setAperture(int value) throws PTPException{
-		return null;
-	}
-
-	public Response setImageQuality(int value) throws PTPException{
-		return null;
-	}
-
-	// Floating point adapters
-	public Response setShutterSpeed (double timeSeconds) throws PTPException{
-		return null;
-	}
-
-	public Response setAperture(double apertureValue) throws PTPException{
-		return null;
-	}
-
-	// Sets ISO to 50, 100, 200... or nearest value
-	public Response setISO(double isoValue) throws PTPException{
-		return null;
-	}
-
-	public Response setExposure(double exposureValue) throws PTPException{  
-		Log.d(TAG, "Not overriden!!!");
-		return null;
-	}
-
-	/**  Selects image Quality from "S" to "RAW" in 4 steps
-	 * 
-	 */
-	public Response setImageQuality (String quality) throws PTPException{
-		return null;
-	}
-
-	////////////////////////Ash
-	public Response setDevicePropValueEx (int x, int y) throws PTPException{
-		return null;
-	}
-	
-	public Response MoveFocus (int x) throws PTPException{
-		return null;
-	}
-	public Response setPictureStyle (int x) throws PTPException{
-		return null;
-	}
-	public Response setWhiteBalance (int x) throws PTPException{
-		return null;
-	}
-	
-	public Response setMetering (int x) throws PTPException{
-		return null;
-	}
-	public Response setDriveMode (int x) throws PTPException{
-		return null;
-	}
-	
-	public DevicePropDesc getPropValue (int value) throws PTPException{
-		return null;
-	}
-	
-	public void setupLiveview () throws PTPException{
-		
-	}
-	
-	public void getLiveView(ImageView x){
-		
-	}
-	
-	
-	public byte[] read(int timeout)
-	{
-		Log.d(TAG,"Reading data");
-		byte data[] = new byte[inMaxPS];	
-		//int lengthOfBytes = mConnection.bulkTransfer(epIn, data , inMaxPS , timeout);
-		
-		int retries=10;
-		int tmp=-1;
-		for(int i=0;i<retries;retries--){
-			tmp= mConnection.bulkTransfer(epIn, data , inMaxPS , timeout);
-			if(tmp<0)
-				Log.e(TAG,"Reading failed, retry");
-			else
-				break;
-		}
-		
-		
-		return data;
-		
-	}
 	public void write(byte[] data, int length, int timeout)
 	{
 		Log.d(TAG,"Sending command");
@@ -994,48 +759,8 @@ public class BaselineInitiator extends NameFactory implements Runnable {
 		
 	}
 
-	/////////////////////////
-	public void setFocusPos(int x, int y)
-	{
 
 
-	}
-	
-	public void setZoom(int zoomLevel)
-	{
-
-
-	}
-	
-	public void doAutoFocus()
-	{
-
-
-	}
-
-
-    // --- following code added by rainx May 2017
-    /**
-     * Hack By Rainx To Support Read Event From Interrupt Endpoint
-     * @param timeout
-     * @return length of content
-     */
-    public int readInter(int timeout, byte[] data)
-    {
-        Log.d(TAG,"Reading interrupt data");
-
-        int retries=10;
-        int length=-1;
-        for(int i=0;i<retries;retries--){
-            length= mConnection.bulkTransfer(epEv, data , intrMaxPS , timeout);
-            if(length<0)
-                Log.e(TAG,"Reading failed, retry");
-            else
-                break;
-        }
-
-        return length;
-    }
 
     /**
      * 实现一个类似Android MtpDevice API里面的imoprtFile的功能
@@ -1196,29 +921,7 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         return sb.toString();
     }
 
-    public void resetListeners() {
-        resetFileAddedlistener();
-        resetFileDownloadedListener();
-        resetFileTransferListener();
-    }
 
-    public void resetFileAddedlistener() {
-        fileAddedListenerList.clear();
-    }
-
-    public void resetFileDownloadedListener() {
-        fileDownloadedListenerList.clear();
-    }
-
-    public void resetFileTransferListener() {
-        fileTransferListenerList.clear();
-    }
-
-    public void setFileAddedListener(FileAddedListener l) {
-        if (!fileAddedListenerList.contains(l)) {
-            fileAddedListenerList.add(l);
-        }
-    }
 
     public void setFileDownloadedListener(FileDownloadedListener l) {
         if (!fileDownloadedListenerList.contains(l)) {
@@ -1232,92 +935,13 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         }
     }
 
-    public boolean isAutoDownloadFile() {
-        return autoDownloadFile;
-    }
-
-    public void setAutoDownloadFile(boolean autoDownloadFile) {
-        this.autoDownloadFile = autoDownloadFile;
-    }
-
-    public boolean isAutoPollEvent() {
-        return autoPollEvent;
-    }
-
-    public void setAutoPollEvent(boolean autoPollEvent) {
-        this.autoPollEvent = autoPollEvent;
-    }
-
-    public String getFileDownloadPath() {
-        return fileDownloadPath;
-    }
 
     public void setFileDownloadPath(String fileDownloadPath) {
         this.fileDownloadPath = fileDownloadPath;
     }
 
-    /**
-     * 获取所有存储设备id列表
-     * @return 设备id数组
-     */
-    public int[] getStorageIds() throws PTPException {
-        Response response;
-        Data data = new Data(BaselineInitiator.this);
-
-        synchronized (session) {
-            response = transact0(Command.GetStorageIDs, data);
-            switch (response.getCode()) {
-                case Response.OK:
-                    data.parse();
-                    /**
-                     * added by rainx, 研究了一下PTP协议里面，之类的ID应该用unsgined int ，但是java
-                     * 里面int为signed ，所以如果精确起见，要么使用long类型，我实现了一个nextUS32Array
-                     * 不过为了和后面的格式兼容，这里暂时还是使用 S32
-                     */
-                    return data.nextS32Array();
-                default:
-                    throw new PTPException(response.toString());
-            }
-        }
-    }
 
 
-    /**
-     * 获取所有对象的句柄
-     * 参考 MTPDevie
-     *
-     *
-     * Returns the list of object handles for all objects on the given storage unit,
-     * with the given format and parent.
-     * Information about each object can be accessed via {@link #getObjectInfo}.
-     *
-     * @param storageId the storage unit to query
-     * @param format the format of the object to return, or zero for all formats
-     * @param objectHandle the parent object to query, -1 for the storage root,
-     *     or zero for all objects
-     * @return the object handles
-     */
-
-    public int[] getObjectHandles(int storageId, int format, int objectHandle) throws PTPException{
-        Response response;
-        Data data = new Data(BaselineInitiator.this);
-
-        synchronized (session) {
-            response = transact3(Command.GetObjectHandles, data, storageId, format, objectHandle);
-            switch (response.getCode()) {
-                case Response.OK:
-                    data.parse();
-                    /**
-                     * added by rainx, 研究了一下PTP协议里面，之类的ID应该用unsgined int ，但是java
-                     * 里面int为signed ，所以如果精确起见，要么使用long类型，我实现了一个nextUS32Array
-                     * 不过为了和后面的格式兼容，这里暂时还是使用 S32
-                     */
-                    return data.nextS32Array();
-                default:
-                    throw new PTPException(response.toString());
-            }
-        }
-    }
 
 
     /**
@@ -1342,22 +966,6 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         }
     }
 
-    // 实现类似google 的getStorageInfo 方法
-    public StorageInfo getStorageInfo(int storageId) throws PTPException {
-        Response response;
-        StorageInfo data = new StorageInfo(BaselineInitiator.this);
-
-        synchronized (session) {
-            response = transact1(Command.GetStorageInfo, data, storageId);
-            switch (response.getCode()) {
-                case Response.OK:
-                    data.parse();
-                    return data;
-                default:
-                    throw new PTPException(response.toString());
-            }
-        }
-    }
 
 
     ///////////////////////////////////////////////////////////////////
@@ -1369,35 +977,21 @@ public class BaselineInitiator extends NameFactory implements Runnable {
      */
     @Override
     public void run() {
-
-        if (syncTriggerMode == SyncParams.SYNC_TRIGGER_MODE_EVENT) {
             runEventPoll();
-        } else if (syncTriggerMode == SyncParams.SYNC_TRIGGER_MODE_POLL_LIST){
-            try {
-                runPollListPoll();
-            } catch (PTPException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     /***
      * Common Event Poll for device
+     * sony 走这个，钦伟
      */
     protected void runEventPoll() {
         Log.v("PTP_EVENT", "开始event轮询");
-        long loopTimes = 0;
         pollEventSetUp();
         if (epEv != null) {
-            byte[] buffer = new byte[intrMaxPS];
-            int length;
-            while (isSessionActive()) {
-                loopTimes++;
 
+            while (isSessionActive()) {
                 ObjectInfo singal = (ObjectInfo) waitVendorSpecifiedFileReadySignal();
                 if(singal!=null){
-
-
                     File outputFile = new File(new File(fileDownloadPath), singal.filename);
                     if (outputFile.exists()) {
                         outputFile.delete();
@@ -1421,248 +1015,20 @@ public class BaselineInitiator extends NameFactory implements Runnable {
         return null;
     }
 
-    protected int getObjectAddedEventCode() {
-        return OBJECT_ADDED_EVENT_CODE;
-    }
-
-    protected void runPollListPoll() throws PTPException {
-        pollThreadRunning = true;
-        final String PTP_POLL_LIST = "PTP_POLL_LIST";
-        Log.v(PTP_POLL_LIST, "开始event轮询");
-        long loopTimes = 0;
-        SyncDeviceManager syncDeviceManager;
-
-        // 调用相机的前置准备工作指令
-        pollListSetUp();
-        // 获取一次现有文件id列表
-        List<Integer> oldObjectHandles;
-
-        int[]  sids; // 存储设备id列表
-        sids = getStorageIds();
-        pollListAfterGetStorages(sids);
-        if (syncRecordMode == SyncParams.SYNC_RECORD_MODE_REMEMBER) {
-            syncDeviceManager = new SyncDeviceManager(device);
-            SyncDevice syncDevice = syncDeviceManager.updateDeviceInfo();
-            // 之前记录过
-            if (syncDevice.getSyncAt() != null) {
-                oldObjectHandles = syncDeviceManager.getIdList();
-            } else {
-                if (syncMode == SyncParams.SYNC_MODE_SYNC_ALL) {
-                    oldObjectHandles = new ArrayList<>();
-                } else {
-                    oldObjectHandles = getObjectHandlesByStorageIds(sids);
-                }
-                if (oldObjectHandles != null) {
-                    syncDeviceManager.updateIdList(oldObjectHandles);
-                } else {
-                    Log.d(TAG, "init oldObjectHandles is null");
-                }
-            }
-        } else if (syncRecordMode == SyncParams.SYNC_RECORD_MODE_FORGET) {
-            if (syncMode == SyncParams.SYNC_MODE_SYNC_ALL) {
-                oldObjectHandles = new ArrayList<>();
-            } else {
-                oldObjectHandles = getObjectHandlesByStorageIds(sids);
-            }
-        } else {
-            //oops should not be here
-            oldObjectHandles = new ArrayList<>();
-        }
-
-
-        Log.v(PTP_POLL_LIST, "初始objectHandle列表: " + oldObjectHandles.toString());
-        while(pollThreadRunning) {
-            if (!isSessionActive() || !autoPollEvent || mConnection == null) {
-                try {
-                    Thread.sleep(DEFAULT_TIMEOUT);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    return;
-                }
-                continue;
-            } else {
-                // common timeout
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    return;
-                }
-
-                List<Integer> newObjectHandles = getObjectHandlesByStorageIds(sids);
-                List<Integer> newAdded = getAllNewAddedObjectHandles(oldObjectHandles, newObjectHandles);
-                Log.v(PTP_POLL_LIST, "New Added objectHandle : " + newAdded.toString());
-                List<Integer> newAddedDownloaded = new ArrayList<Integer>();
-                if (newAdded.size() > 0) {
-                    boolean downloadInterrupted = false;
-                    for (int h : newAdded) {
-                        if (processFileAddEvent(h, null)) {
-                            // 如果文件下载成功，则记录
-                            newAddedDownloaded.add(h);
-                        } else {
-                            // 如果下载失败，退出循环
-                            downloadInterrupted = true;
-                            break;
-                        }
-                    }
-
-                    // 更新oldObjectHandle ,到最新的版本
-                    if (!downloadInterrupted) {
-                        oldObjectHandles = new ArrayList<>(newObjectHandles);
-                    } else {
-                        // 如果下载终端，则只添加成功下载的handle id
-                        oldObjectHandles.addAll(newAddedDownloaded);
-                    }
-
-                    if (syncRecordMode == SyncParams.SYNC_RECORD_MODE_REMEMBER) {
-                        syncDeviceManager = new SyncDeviceManager(device);
-                        syncDeviceManager.updateIdList(oldObjectHandles);
-                    }
-                }
-
-            }
-
-        }
-
-        // 调用相机的清理工作指令
-        pollListTearDown();
-        Log.v(PTP_POLL_LIST, "结束轮询");
-    }
-
-
-    private List<Integer> getAllNewAddedObjectHandles(List<Integer> oldHandles, List<Integer> newHandles) {
-        List<Integer> newAdded = new ArrayList<>();
-        for (Integer newHandle: newHandles) {
-            if (!oldHandles.contains(newHandle)) {
-                newAdded.add(newHandle);
-            }
-        }
-        return newAdded;
-    }
-
-    private List<Integer> getObjectHandlesByStorageIds(int[] sids) throws PTPException {
-        List<Integer> objectHandles;
-        objectHandles = new ArrayList<Integer>();
-        for(int sid : sids) {
-            int[] oneStorageObjectHandles = getObjectHandles(sid, getObjectHandleFilterParam, 0);
-            for (int h : oneStorageObjectHandles) {
-                objectHandles.add(h);
-            }
-        }
-        return objectHandles;
-    }
-
     // 可以被子类覆盖，进行轮询之前的准备工作
     protected void pollListSetUp() {
 
     }
 
-    // 可以被子类覆盖，进行轮询之后的清理工作
-    protected void pollListTearDown() {
-
-    }
-
-    protected void pollListAfterGetStorages(int ids[]) {
-
-    }
 
     // poll event setup mode
     protected void pollEventSetUp() {
 
     }
 
-    protected boolean processFileAddEvent(int fileHandle, Object event) {
-        Log.v(TAG, "start processFileAddEvent : handle -> " + fileHandle);
-        for(FileAddedListener fileAddedListener: fileAddedListenerList) {
-            fileAddedListener.onFileAdded(BaselineInitiator.this, fileHandle, event);
-        }
-        if (autoDownloadFile && fileDownloadPath != null) {
-            try {
-                String downloadFileName;
-
-                ObjectInfo objectInfo = null;
-
-
-                    objectInfo = (ObjectInfo) event;
-
-
-                if (objectInfo.associationType == 1) { // skip folder
-                    return true;
-                }
-
-
-                        // 因为索尼always 固定的ID，所以我们需要给它一个随机id
-                        downloadFileName = getRandomFileName();
-
-
-
-                File outputFile = new File(new File(fileDownloadPath), downloadFileName);
-                if (outputFile.exists()) {
-                    outputFile.delete();
-                }
-                String outputFilePath = outputFile.getPath();
-                importFile(fileHandle, outputFilePath);
-                return true;
-            } catch (PTPException e) {
-                e.printStackTrace();
-                return false;
-            } catch (IOException e) {
-                e.printStackTrace();
-                return false;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return false;
-            }
-        }
-        return false;
-    }
-
-    private String getRandomFileName() {
-        String downloadFileName;
-        Integer randId = rand.nextInt();
-        long  randIdLong = randId & 0xffffffffl; // to unsigned
-        downloadFileName = "tmp_" + randIdLong + ".jpg";
-        return downloadFileName;
-    }
-
-
-    public int getSyncTriggerMode() {
-        return syncTriggerMode;
-    }
-
     public void setSyncTriggerMode(int syncTriggerMode) {
         this.syncTriggerMode = syncTriggerMode;
     }
 
-    public int getSyncMode() {
-        return syncMode;
-    }
 
-    public void setSyncMode(int syncMode) {
-        this.syncMode = syncMode;
-    }
-
-    public int getSyncRecordMode() {
-        return syncRecordMode;
-    }
-
-    public void setSyncRecordMode(int syncRecordMode) {
-        this.syncRecordMode = syncRecordMode;
-    }
-
-    public int getGetObjectHandleFilterParam() {
-        return getObjectHandleFilterParam;
-    }
-
-    public void setGetObjectHandleFilterParam(int getObjectHandleFilterParam) {
-        this.getObjectHandleFilterParam = getObjectHandleFilterParam;
-    }
-
-    public int getFileNameRule() {
-        return fileNameRule;
-    }
-
-    public void setFileNameRule(int fileNameRule) {
-        this.fileNameRule = fileNameRule;
-    }
 }
