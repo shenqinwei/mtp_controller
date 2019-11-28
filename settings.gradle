@@ -1,1 +1,1 @@
-include ':library', ':mtpcontrollerdemo'
+include ':sonylibrary', ':mtpcontrollerdemo'

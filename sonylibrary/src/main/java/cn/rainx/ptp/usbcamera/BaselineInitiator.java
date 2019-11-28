@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import cn.rainx.ptp.interfaces.FileAddedListener;
 import cn.rainx.ptp.interfaces.FileDownloadedListener;
 import cn.rainx.ptp.interfaces.FileTransferListener;
 import cn.rainx.ptp.params.SyncParams;

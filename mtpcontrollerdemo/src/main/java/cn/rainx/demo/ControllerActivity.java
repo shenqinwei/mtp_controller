@@ -260,7 +260,7 @@ public class ControllerActivity extends AppCompatActivity implements View.OnClic
             try {
                 bi = InitiatorFactory.produceInitiator(device, usbManager);
                 bi.getClearStatus(); // ?????
-                bi.setSyncTriggerMode(SyncParams.SYNC_TRIGGER_MODE_POLL_LIST);
+               // bi.setSyncTriggerMode(SyncParams.SYNC_TRIGGER_MODE_POLL_LIST);
                 if (bi instanceof SonyInitiator) {
                     // 索尼只能支持event 模式
                     bi.setSyncTriggerMode(SyncParams.SYNC_TRIGGER_MODE_EVENT);
